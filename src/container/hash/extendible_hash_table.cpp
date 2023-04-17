@@ -156,7 +156,7 @@ auto ExtendibleHashTable<K, V>::RedistributeBucket(std::shared_ptr<Bucket> bucke
   // mask = GetKLowBit(std::hash<K>(key),)
   for (auto it = cur_items.begin(); it != cur_items.end();) {
     if (TestKBit(depth, std::hash<K>()(it->first))) {
-      BUSTUB_ASSERT(!new_bucket->IsFull(),"bucket is not full");
+      BUSTUB_ASSERT(!new_bucket->IsFull(), "bucket is not full");
       new_bucket->Insert(it->first, it->second);
       it = cur_items.erase(it);
     } else {
