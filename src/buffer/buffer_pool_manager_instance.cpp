@@ -47,8 +47,8 @@ auto BufferPoolManagerInstance::NewPgImp(page_id_t *page_id) -> Page * {
   if (!free_list_.empty()) {
     page_id_t new_page_id = AllocatePage();
 
-    frame_id_t frame_id = free_list_.back();
-    free_list_.pop_back();
+    frame_id_t frame_id = free_list_.front();
+    free_list_.pop_front();
 
     AddFrame(frame_id, new_page_id);
     Page *new_page = &pages_[frame_id];
@@ -77,6 +77,8 @@ auto BufferPoolManagerInstance::FetchPgImp(page_id_t page_id) -> Page * {
   if (page_table_->Find(page_id, frame_id)) {
     BUSTUB_ASSERT(frame_id >= 0 && frame_id < static_cast<frame_id_t>(pool_size_), "frame_id should be valid");
     replacer_->RecordAccess(frame_id);
+    replacer_->SetEvictable(frame_id, false);
+    pages_[frame_id].pin_count_++;
     return &pages_[frame_id];
   }
   // 需要从磁盘上将page读入到bufferpool
