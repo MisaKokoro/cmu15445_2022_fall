@@ -23,6 +23,8 @@ namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 
+enum class Operation { SEARCH, INSERT, DELETE };
+
 /**
  * Main class providing the API for the Interactive B+ Tree.
  *
@@ -73,6 +75,11 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
+  // 自己添加的辅助函数
+  auto FindLeaf(const KeyType &key, Operation operation, Transaction *transaction = nullptr, bool leftMost = false,
+                bool rightMost = false) -> Page *;
+  // 释放事务所有的锁
+  void ReleaseLatchFromQueue(Transaction *transaction);
 
  private:
   void UpdateRootPageId(int insert_record = 0);
@@ -81,6 +88,29 @@ class BPlusTree {
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
+  // 自己添加的辅助函数
+  void StartNewTree(const KeyType &key, const ValueType &value);
+
+  auto InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool;
+
+  void InsertIntoParent(BPlusTreePage *old_node, const KeyType &key, BPlusTreePage *new_node,
+                        Transaction *transaction = nullptr);
+
+  template <typename N>
+  auto Split(N *node) -> N *;
+
+  template <typename N>
+  auto CoalesceOrRedistribute(N *node, Transaction *transaction = nullptr) -> bool;
+
+  template <typename N>
+  auto Coalesce(N *neighbor_node, N *node, BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *parent, int index,
+                Transaction *transaction = nullptr) -> bool;
+
+  template <typename N>
+  void Redistribute(N *neighbor_node, N *node, BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator> *parent,
+                    int index, bool from_prev);
+
+  auto AdjustRoot(BPlusTreePage *node) -> bool;
 
   // member variable
   std::string index_name_;
@@ -89,6 +119,7 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  ReaderWriterLatch root_page_id_latch_;
 };
 
 }  // namespace bustub

@@ -161,7 +161,7 @@ TEST(BufferPoolManagerTest, SampleTest2) {
   ASSERT_NE(nullptr, page_zero);
 
   // change content in page one
-  strcpy(page_zero->GetData(), "Hello");
+  strcpy(page_zero->GetData(), "Hello");  // NOLINT
 
   for (int i = 1; i < 10; ++i) {
     EXPECT_NE(nullptr, bpm->NewPage(&temp_page_id));
@@ -204,7 +204,7 @@ TEST(BufferPoolManagerTest, SampleTest3) {
   ASSERT_NE(nullptr, page_zero);
 
   // change content in page one
-  strcpy(page_zero->GetData(), "Hello");
+  strcpy(page_zero->GetData(), "Hello");  // NOLINT
 
   for (int i = 1; i < 10; ++i) {
     EXPECT_NE(nullptr, bpm->NewPage(&temp_page_id));

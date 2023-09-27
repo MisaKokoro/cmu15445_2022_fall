@@ -49,6 +49,24 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto GetNextPageId() const -> page_id_t;
   void SetNextPageId(page_id_t next_page_id);
   auto KeyAt(int index) const -> KeyType;
+  // 自己写的辅助函数
+  auto Lookup(const KeyType &key, ValueType *value, const KeyComparator &cmp) -> bool;
+  auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &cmp) -> int;
+  auto KeyIndex(const KeyType &key, const KeyComparator &comparator) const -> int;
+  auto RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &keyComparator) -> int;
+  auto GetItem(int index) -> const MappingType &;
+
+  void MoveHalfTo(BPlusTreeLeafPage *recipient);
+  void MoveAllTo(BPlusTreeLeafPage *recipient);
+  void MoveFirstToEndOf(BPlusTreeLeafPage *recipient);
+  void MoveLastToFrontOf(BPlusTreeLeafPage *recipient);
+
+ private:
+  void CopyNFrom(MappingType *items, int size);
+  // 作用相当于push_back
+  void CopyLastFrom(const MappingType &item);
+  // 作用相当于push_front
+  void CopyFirstFrom(const MappingType &item);
 
  private:
   page_id_t next_page_id_;

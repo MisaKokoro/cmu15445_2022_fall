@@ -41,6 +41,33 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   auto KeyAt(int index) const -> KeyType;
   void SetKeyAt(int index, const KeyType &key);
   auto ValueAt(int index) const -> ValueType;
+  void SetValueAt(int index, const ValueType &value);
+
+  // 自己实现的辅助函数
+  auto Lookup(const KeyType &key, const KeyComparator &comparator) const -> ValueType;
+  void Remove(int index);
+  void MoveAllTo(BPlusTreeInternalPage *recipient, const KeyType &middle_key, BufferPoolManager *buffer_pool_manager);
+  void MoveHalfTo(BPlusTreeInternalPage *recipient, BufferPoolManager *buffer_pool_manager);
+  void MoveFirstToEndOf(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
+                        BufferPoolManager *buffer_pool_manager);
+  void MoveLastToFrontOf(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
+                         BufferPoolManager *buffer_pool_manager);
+
+  /*
+   * 在非叶节点中插入一个kv
+   * 通过old_value找到，新的kv应该插入的位置
+   * 但是为什么不通过key来查找呢？通过key不是可以使用二分来查找吗？
+   */
+  auto InsertNodeAfter(const ValueType &old_value, const KeyType &new_key, const ValueType &new_value) -> int;
+
+  auto ValueIndex(const ValueType &value) const -> int;
+
+  void PopulateNewRoot(const ValueType &old_value, const KeyType &new_key, const ValueType &new_value);
+
+ private:
+  void CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager);
+  void CopyLastFrom(const MappingType &pair, BufferPoolManager *buffer_pool_manager);
+  void CopyFirstFrom(const MappingType &pair, BufferPoolManager *buffer_pool_manager);
 
  private:
   // Flexible array member for page data.
