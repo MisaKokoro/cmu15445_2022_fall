@@ -1,25 +1,13 @@
-//===----------------------------------------------------------------------===//
-//
-//                         BusTub
-//
-// nested_loop_join_executor.h
-//
-// Identification: src/include/execution/executors/nested_loop_join_executor.h
-//
-// Copyright (c) 2015-2021, Carnegie Mellon University Database Group
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include <memory>
 #include <utility>
 
+#include <vector>
 #include "execution/executor_context.h"
 #include "execution/executors/abstract_executor.h"
 #include "execution/plans/nested_loop_join_plan.h"
 #include "storage/table/tuple.h"
-
 namespace bustub {
 
 /**
@@ -53,8 +41,20 @@ class NestedLoopJoinExecutor : public AbstractExecutor {
   auto GetOutputSchema() const -> const Schema & override { return plan_->OutputSchema(); };
 
  private:
+  auto InnerJoin(const Schema &schema, Tuple *tuple) -> bool;
+  auto LeftJoin(const Schema &schema, Tuple *tuple) -> bool;
   /** The NestedLoopJoin plan node to be executed. */
   const NestedLoopJoinPlanNode *plan_;
+  bool is_ineer_{false};
+  std::unique_ptr<AbstractExecutor> left_executor_;
+  std::unique_ptr<AbstractExecutor> right_executor_;
+  std::vector<Tuple> right_tuples_;
+  uint64_t index_{0};
+  Tuple left_tuple_;
+  RID left_rid_;
+  Schema left_schema_;
+  Schema right_schema_;
+  bool is_match_{true};
 };
 
 }  // namespace bustub

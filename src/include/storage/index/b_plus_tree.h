@@ -19,6 +19,8 @@
 #include "storage/page/b_plus_tree_internal_page.h"
 #include "storage/page/b_plus_tree_leaf_page.h"
 
+#include "common/rwlatch.h"
+
 namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
@@ -75,10 +77,9 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
-  // 自己添加的辅助函数
+
   auto FindLeaf(const KeyType &key, Operation operation, Transaction *transaction = nullptr, bool leftMost = false,
                 bool rightMost = false) -> Page *;
-  // 释放事务所有的锁
   void ReleaseLatchFromQueue(Transaction *transaction);
 
  private:
@@ -88,10 +89,10 @@ class BPlusTree {
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
 
   void ToString(BPlusTreePage *page, BufferPoolManager *bpm) const;
-  // 自己添加的辅助函数
+
   void StartNewTree(const KeyType &key, const ValueType &value);
 
-  auto InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool;
+  auto InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction = nullptr) -> bool;
 
   void InsertIntoParent(BPlusTreePage *old_node, const KeyType &key, BPlusTreePage *new_node,
                         Transaction *transaction = nullptr);
@@ -111,7 +112,6 @@ class BPlusTree {
                     int index, bool from_prev);
 
   auto AdjustRoot(BPlusTreePage *node) -> bool;
-
   // member variable
   std::string index_name_;
   page_id_t root_page_id_;
@@ -119,6 +119,11 @@ class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  /**
+   * 因为根节点没有父节点，因此对根节点访问之前
+   * 需要先加上一把锁，不然的话当出现根的调整时
+   * 其他线程对根的操作可能会发生错误
+   */
   ReaderWriterLatch root_page_id_latch_;
 };
 

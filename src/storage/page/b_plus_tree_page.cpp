@@ -20,6 +20,7 @@ namespace bustub {
 auto BPlusTreePage::IsLeafPage() const -> bool { return page_type_ == IndexPageType::LEAF_PAGE; }
 auto BPlusTreePage::IsRootPage() const -> bool { return parent_page_id_ == INVALID_PAGE_ID; }
 void BPlusTreePage::SetPageType(IndexPageType page_type) { page_type_ = page_type; }
+
 auto BPlusTreePage::GetPageType() -> IndexPageType { return page_type_; }
 
 /*
@@ -40,9 +41,11 @@ void BPlusTreePage::SetMaxSize(int size) { max_size_ = size; }
  * Helper method to get min page size
  * Generally, min page size == max page size / 2
  */
-// 注意，如果是叶子节点，其半满容量应该是最大容量/2向下取整，非叶节点应该是最大容量/2向上取整
-// 这和非叶节点中第一个key无效有关
 auto BPlusTreePage::GetMinSize() const -> int {
+  /*
+   * 叶子：向下取整
+   * 非叶子：向上取整
+   * */
   if (IsLeafPage()) {
     return max_size_ / 2;
   }

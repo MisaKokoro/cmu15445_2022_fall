@@ -25,13 +25,11 @@ INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, Page *page, int index)
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::~IndexIterator() {
   if (page_ != nullptr) {
+    page_->RUnlatch();
     buffer_pool_manager_->UnpinPage(page_->GetPageId(), false);
   }
 }
 
-/**
- * 最后一个page没有后继结点，index处于最后一个kv对时就是end
- */
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::IsEnd() -> bool {
   return leaf_->GetNextPageId() == INVALID_PAGE_ID && index_ == leaf_->GetSize();
@@ -42,9 +40,11 @@ auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { return leaf_->GetI
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
-  // 下一项在另一个page里了
   if (index_ == leaf_->GetSize() - 1 && leaf_->GetNextPageId() != INVALID_PAGE_ID) {
     auto next_page = buffer_pool_manager_->FetchPage(leaf_->GetNextPageId());
+
+    next_page->RLatch();
+    page_->RUnlatch();
     buffer_pool_manager_->UnpinPage(page_->GetPageId(), false);
 
     page_ = next_page;
@@ -56,10 +56,6 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
 
   return *this;
 }
-
-/**
-TODO 为什么叶子节点为空时，返回true?
-*/
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator==(const IndexIterator &itr) const -> bool {

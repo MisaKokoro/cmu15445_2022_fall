@@ -52,5 +52,10 @@ class SortExecutor : public AbstractExecutor {
  private:
   /** The sort plan node to be executed */
   const SortPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  // 初始化时将所有的tuple进行排序并存储起来
+  std::vector<Tuple> sorted_tuples_;
+  // 在Next函数中调用每次返回一个tuple
+  std::vector<Tuple>::iterator iterator_;
 };
 }  // namespace bustub

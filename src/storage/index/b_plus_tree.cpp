@@ -371,7 +371,7 @@ void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node,
           |     |      |      |
           +-----+      +------+
 
-   * */ 
+   * */
 
   if (node->IsLeafPage()) {
     auto *leaf_node = reinterpret_cast<LeafPage *>(node);
@@ -393,7 +393,7 @@ void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node,
     if (!from_prev) {
       neighbor_internal_node->MoveFirstToEndOf(internal_node, parent->KeyAt(index + 1), buffer_pool_manager_);
       parent->SetKeyAt(index + 1, neighbor_internal_node->KeyAt(0));
-    } else {  
+    } else {
       neighbor_internal_node->MoveLastToFrontOf(internal_node, parent->KeyAt(index), buffer_pool_manager_);
       parent->SetKeyAt(index, internal_node->KeyAt(0));
     }
@@ -411,7 +411,7 @@ void BPLUSTREE_TYPE::Redistribute(N *neighbor_node, N *node,
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
   if (root_page_id_ == INVALID_PAGE_ID) {
-    return INDEXITERATOR_TYPE();
+    return INDEXITERATOR_TYPE(nullptr, nullptr);
   }
   root_page_id_latch_.RLock();
   auto leftmost_page = FindLeaf(KeyType(), Operation::SEARCH, nullptr, true);
@@ -426,7 +426,7 @@ auto BPLUSTREE_TYPE::Begin() -> INDEXITERATOR_TYPE {
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE {
   if (root_page_id_ == INVALID_PAGE_ID) {
-    return INDEXITERATOR_TYPE();
+    return INDEXITERATOR_TYPE(nullptr, nullptr);
   }
   root_page_id_latch_.RLock();
   auto buffer_page = FindLeaf(key, Operation::SEARCH);
@@ -443,6 +443,7 @@ auto BPLUSTREE_TYPE::FindLeaf(const KeyType &key, Operation operation, Transacti
   assert(root_page_id_ != INVALID_PAGE_ID);
   auto page = buffer_pool_manager_->FetchPage(root_page_id_);
   auto *node = reinterpret_cast<BPlusTreePage *>(page->GetData());
+  // 根据操作的类型决定是否根节点的锁
   if (operation == Operation::SEARCH) {
     root_page_id_latch_.RUnlock();
     page->RLatch();
@@ -536,7 +537,7 @@ auto BPLUSTREE_TYPE::Coalesce(N *neighbor_node, N *node,
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE {
   if (root_page_id_ == INVALID_PAGE_ID) {
-    return INDEXITERATOR_TYPE();
+    return INDEXITERATOR_TYPE(nullptr, nullptr);
   }
   root_page_id_latch_.RLock();
   auto rightmost_page = FindLeaf(KeyType(), Operation::SEARCH, nullptr, false, true);
@@ -555,7 +556,6 @@ void BPLUSTREE_TYPE::ReleaseLatchFromQueue(Transaction *transaction) {
   while (!transaction->GetPageSet()->empty()) {
     Page *page = transaction->GetPageSet()->front();
     transaction->GetPageSet()->pop_front();
-    // 根节点因为没有父节点，当page为nullptr代表需要解锁的是根节点
     if (page == nullptr) {
       this->root_page_id_latch_.WUnlock();
     } else {

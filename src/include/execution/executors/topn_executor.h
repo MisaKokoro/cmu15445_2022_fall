@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <stack>
 #include <vector>
 
 #include "execution/executor_context.h"
@@ -52,5 +53,12 @@ class TopNExecutor : public AbstractExecutor {
  private:
   /** The topn plan node to be executed */
   const TopNPlanNode *plan_;
+  std::unique_ptr<AbstractExecutor> child_executor_;
+  /**
+   * 存储已经排完序的topK个元素
+   * 因此最终的结果是从优先队列中获取的，是逆序
+   * 需要用stack存储，减少一次reverse操作
+   * */
+  std::stack<Tuple> child_tuples_;
 };
 }  // namespace bustub
