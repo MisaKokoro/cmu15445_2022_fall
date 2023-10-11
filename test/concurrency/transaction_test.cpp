@@ -68,7 +68,7 @@ void CheckTxnRowLockSize(Transaction *txn, size_t shared_size, size_t exclusive_
 }
 
 // NOLINTNEXTLINE
-TEST_F(TransactionTest, DISABLED_SimpleInsertRollbackTest) {
+TEST_F(TransactionTest, SimpleInsertRollbackTest) {
   // txn1: INSERT INTO empty_table2 VALUES (200, 20), (201, 21), (202, 22)
   // txn1: abort
   // txn2: SELECT * FROM empty_table2;
@@ -91,7 +91,7 @@ TEST_F(TransactionTest, DISABLED_SimpleInsertRollbackTest) {
 }
 
 // NOLINTNEXTLINE
-TEST_F(TransactionTest, DISABLED_DirtyReadsTest) {
+TEST_F(TransactionTest, DirtyReadsTest) {
   bustub_->GenerateTestTable();
 
   // txn1: INSERT INTO empty_table2 VALUES (200, 20), (201, 21), (202, 22)
@@ -116,6 +116,60 @@ TEST_F(TransactionTest, DISABLED_DirtyReadsTest) {
   delete txn2;
 
   bustub_->txn_manager_->Abort(txn1);
+  delete txn1;
+}
+
+TEST_F(TransactionTest, ReadCommitedTest) {
+  bustub_->GenerateTestTable();
+
+  // txn1: INSERT INTO empty_table2 VALUES (200, 20), (201, 21), (202, 22)
+  // txn2: SELECT * FROM empty_table2;
+  // txn1: abort
+
+  auto noop_writer = NoopWriter();
+
+  bustub_->ExecuteSql("CREATE TABLE empty_table2 (colA int, colB int)", noop_writer);
+  bustub_->ExecuteSql("INSERT INTO empty_table2 VALUES (200, 20)", noop_writer);
+
+  auto *txn1 = bustub_->txn_manager_->Begin(nullptr, IsolationLevel::REPEATABLE_READ);
+  auto *txn2 = bustub_->txn_manager_->Begin(nullptr, IsolationLevel::REPEATABLE_READ);
+
+  std::thread t1([&]() {
+    std::stringstream ss;
+    auto writer2 = SimpleStreamWriter(ss, true);
+    bustub_->ExecuteSqlTxn("SELECT * FROM empty_table2", writer2, txn1);
+    EXPECT_EQ(ss.str(), "200\t20\t\n");
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
+    // 清空stringstream
+    ss.clear();
+    ss.str("");
+
+    bustub_->ExecuteSqlTxn("SELECT * FROM empty_table2", writer2, txn1);
+    EXPECT_EQ(ss.str(), "200\t20\t\n");
+    bustub_->txn_manager_->Commit(txn1);
+  });
+
+
+  std::thread t2([&]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    bustub_->ExecuteSqlTxn("DELETE FROM empty_table2 where colA = 200", noop_writer, txn2);
+    bustub_->ExecuteSqlTxn("INSERT INTO empty_table2 VALUES (200, 90)", noop_writer, txn2);
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    bustub_->txn_manager_->Commit(txn2);
+  });
+
+
+
+
+  // 如果是单线程的程序，txn2会阻塞在这里在READ_COMMITTED隔离级别下
+
+
+
+
+
+  t1.join();
+  t2.join();
+  delete txn2;
   delete txn1;
 }
 

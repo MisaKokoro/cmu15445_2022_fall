@@ -23,8 +23,18 @@ InsertExecutor::InsertExecutor(ExecutorContext *exec_ctx, const InsertPlanNode *
 }
 
 void InsertExecutor::Init() {
-  // 子executor需要初始化一下
   child_executor_->Init();
+  try {
+    // 插入tuple
+    // 先锁表 用意向排它锁IX 为什么这里不区分隔离级别
+    bool is_locked = exec_ctx_->GetLockManager()->LockTable(
+        exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    if (!is_locked) {
+      throw ExecutionException("Insert Executor Get Table Lock Failed");
+    }
+  } catch (TransactionAbortException const &e) {
+    throw ExecutionException("Insert Executor Get Table Lock Failed");
+  }
   table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 }
 
@@ -38,12 +48,23 @@ auto InsertExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
 
   while (child_executor_->Next(&to_insert_tuple, &emit_rid)) {
     bool inserted = table_info_->table_->InsertTuple(to_insert_tuple, rid, exec_ctx_->GetTransaction());
-    /**
-     * 插入一条新的数据需要更新所有的索引，这里的索引指的是一张
-     * 表的多个索引，一张表可能会创建多个索引，比如B+树索引，哈希表索引等
-     * 因此需要对所有的索引进行更新
-     */
+
     if (inserted) {
+      try {
+        // 获取行锁 排它锁X 传入rid
+        bool is_locked = exec_ctx_->GetLockManager()->LockRow(
+            exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE, table_info_->oid_, *rid);
+        if (!is_locked) {
+          throw ExecutionException("Insert Executor Get Row Lock Failed");
+        }
+      } catch (TransactionAbortException const &e) {
+        throw ExecutionException("Insert Executor Get Row Lock Failed");
+      }
+      /**
+       * 插入一条新的数据需要更新所有的索引，这里的索引指的是一张
+       * 表的多个索引，一张表可能会创建多个索引，比如B+树索引，哈希表索引等
+       * 因此需要对所有的索引进行更新
+       */
       std::for_each(table_indexes_.begin(), table_indexes_.end(),
                     [&to_insert_tuple, &rid, &table_info = table_info_, &exec_ctx = exec_ctx_](IndexInfo *index) {
                       index->index_->InsertEntry(to_insert_tuple.KeyFromTuple(table_info->schema_, index->key_schema_,

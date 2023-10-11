@@ -17,6 +17,7 @@
 #include <list>
 #include <memory>
 #include <mutex>  // NOLINT
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -63,8 +64,11 @@ class LockManager {
 
   class LockRequestQueue {
    public:
-    /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    /**
+     *  List of lock requests for the same resource (table or row)
+     *  这里修改了request_queue_的定义，使用智能指针管理lock_request，自动释放资源，避免手动改释放
+     * */
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -297,6 +301,70 @@ class LockManager {
    */
   auto RunCycleDetection() -> void;
 
+  auto GrantLock(const std::shared_ptr<LockRequest> &lock_request,
+                 const std::shared_ptr<LockRequestQueue> &lock_request_queue) -> bool;
+  /**
+   * 当一个事务加上一把锁时，需要维护事务内部的锁集合
+   * @param t1 需要维护的事务
+   * @param t2 锁请求
+   * @param t3 插入还是删除
+   */
+  auto InsertOrDeleteTableLockSet(Transaction *txn, const std::shared_ptr<LockRequest> &lock_request, bool insert)
+      -> void;
+
+  auto InsertOrDeleteRowLockSet(Transaction *txn, const std::shared_ptr<LockRequest> &lock_request, bool insert)
+      -> void;
+
+  auto InsertRowLockSet(const std::shared_ptr<std::unordered_map<table_oid_t, std::unordered_set<RID>>> &lock_set,
+                        const table_oid_t &oid, const RID &rid) -> void {
+    auto row_lock_set = lock_set->find(oid);
+    if (row_lock_set == lock_set->end()) {
+      lock_set->emplace(oid, std::unordered_set<RID>{});
+      row_lock_set = lock_set->find(oid);
+    }
+    row_lock_set->second.emplace(rid);
+  }
+
+  auto DeleteRowLockSet(const std::shared_ptr<std::unordered_map<table_oid_t, std::unordered_set<RID>>> &lock_set,
+                        const table_oid_t &oid, const RID &rid) -> void {
+    auto row_lock_set = lock_set->find(oid);
+    if (row_lock_set == lock_set->end()) {
+      return;
+    }
+    row_lock_set->second.erase(rid);
+  }
+
+ private:
+  auto Dfs(txn_id_t txn_id) -> bool {
+    // 如果这个txn_id在安全的集合中找到了，说明不存在环
+    if (safe_set_.find(txn_id) != safe_set_.end()) {
+      return false;
+    }
+    // 将自己事务id加入到死锁集合
+    active_set_.insert(txn_id);
+    // 取得该事务txn_id所有的依赖事务
+    std::vector<txn_id_t> &next_node_vector = waits_for_[txn_id];
+    // 排序 为啥要排序呢？
+    std::sort(next_node_vector.begin(), next_node_vector.end());
+    for (txn_id_t const next_node : next_node_vector) {
+      // 如果这个节点是死锁节点
+      if (active_set_.find(next_node) != active_set_.end()) {
+        return true;
+      }
+      // 如果不在死锁节点则继续查找
+      if (Dfs(next_node)) {
+        return true;
+      }
+    }
+
+    // 删除
+    active_set_.erase(txn_id);
+    // 插入安全集合
+    safe_set_.insert(txn_id);
+    return false;
+  }
+  auto DeleteNode(txn_id_t txn_id) -> void;
+
  private:
   /** Fall 2022 */
   /** Structure that holds lock requests for a given table oid */
@@ -314,6 +382,13 @@ class LockManager {
   /** Waits-for graph representation. */
   std::unordered_map<txn_id_t, std::vector<txn_id_t>> waits_for_;
   std::mutex waits_for_latch_;
+
+  std::set<txn_id_t> safe_set_;              // 已经安全的事务集合
+  std::set<txn_id_t> txn_set_;               // 所有的事务集合
+  std::unordered_set<txn_id_t> active_set_;  // 活跃的事务集合
+
+  std::unordered_map<txn_id_t, RID> map_txn_rid_;
+  std::unordered_map<txn_id_t, table_oid_t> map_txn_oid_;
 };
 
 }  // namespace bustub

@@ -18,11 +18,22 @@ namespace bustub {
 
 DeleteExecutor::DeleteExecutor(ExecutorContext *exec_ctx, const DeletePlanNode *plan,
                                std::unique_ptr<AbstractExecutor> &&child_executor)
-    : AbstractExecutor(exec_ctx), plan_(plan), child_executor_(std::move(child_executor)) {}
+    : AbstractExecutor(exec_ctx), plan_{plan}, child_executor_{std::move(child_executor)} {
+  this->table_info_ = this->exec_ctx_->GetCatalog()->GetTable(plan_->table_oid_);
+}
 
 void DeleteExecutor::Init() {
   child_executor_->Init();
-  table_info_ = exec_ctx_->GetCatalog()->GetTable(plan_->TableOid());
+  try {
+    // 获取表锁 意向排它锁IX
+    bool is_locked = exec_ctx_->GetLockManager()->LockTable(
+        exec_ctx_->GetTransaction(), LockManager::LockMode::INTENTION_EXCLUSIVE, table_info_->oid_);
+    if (!is_locked) {
+      throw ExecutionException("Delete Executor Get Table Lock Failed");
+    }
+  } catch (TransactionAbortException const &e) {
+    throw ExecutionException("Delete Executor Get Table Lock Failed");
+  }
   table_indexes_ = exec_ctx_->GetCatalog()->GetTableIndexes(table_info_->name_);
 }
 
@@ -35,6 +46,17 @@ auto DeleteExecutor::Next([[maybe_unused]] Tuple *tuple, RID *rid) -> bool {
   int32_t delete_count = 0;
 
   while (child_executor_->Next(&to_delete_tuple, &emit_rid)) {
+    try {
+      // 获取行锁 排它锁X 为什么不用解锁呢？在哪儿解锁的 事务提交的时候解锁
+      bool is_locked = exec_ctx_->GetLockManager()->LockRow(
+          exec_ctx_->GetTransaction(), LockManager::LockMode::EXCLUSIVE, table_info_->oid_, emit_rid);
+      if (!is_locked) {
+        throw ExecutionException("Delete Executor Get Row Lock Failed");
+      }
+    } catch (TransactionAbortException const &e) {
+      throw ExecutionException("Delete Executor Get Row Lock Failed");
+    }
+
     bool deleted = table_info_->table_->MarkDelete(emit_rid, exec_ctx_->GetTransaction());
 
     if (deleted) {
